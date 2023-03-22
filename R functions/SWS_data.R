@@ -3,7 +3,8 @@
 #-------------------------------------------------------------------------------
 SWS_data <- function(domain,
                      dataset,
-                     keys=NULL) {
+                     keys=NULL,
+                     Flag=F) {
     
     dimension_name = GetDatasetConfig(domain,dataset)$dimensions
     ndim=length(dimension_name)
@@ -35,6 +36,9 @@ SWS_data <- function(domain,
         dimensions = dimensions)
     
     system.time(Data <- GetData(DatasetKey))
+    
+    if (Flag == F){ Data[, c("flagObservationStatus","flagMethod"):= NULL ]}
+    
     return(Data)
     }
 }

@@ -2,7 +2,7 @@
 
 plugin_name = "Trade Indices Numbers"
 wd ="~/TradeIndicesNumber" # Rstudio Directory
-env = "QA" # QA, PROD or SWS
+env = "PROD" # QA, PROD or SWS
 
 status_message <- function(text){message(paste(c("Your", plugin_name, "Plugin", text), collapse = " "))}
 status_message("has started.")
@@ -61,4 +61,5 @@ status_message("is reading its parameters.")
 # Selected query
 
 # swsContext.datasets[[1]]@dimensions[["measuredElement"]]@keys
+
 
