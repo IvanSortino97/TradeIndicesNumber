@@ -20,6 +20,7 @@
 # RStudio files
 .Rproj.user/
 .Rproj
+/TradeIndicesNumber.Rproj
 
 # produced vignettes
 vignettes/*.html
