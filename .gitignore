@@ -19,6 +19,7 @@
 
 # RStudio files
 .Rproj.user/
+.Rproj
 
 # produced vignettes
 vignettes/*.html
@@ -40,6 +41,7 @@ vignettes/*.pdf
 
 # yml debug token
 .yml
+*sws.yml
 
 # Certificate
 .key
