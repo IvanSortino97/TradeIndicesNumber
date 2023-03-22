@@ -1,0 +1,11 @@
+current: qa
+
+production:
+  certdir: ./sws/prod
+  server: https://sws.aws.fao.org:8181 
+  token: xxx
+
+qa:
+  certdir: ./sws/qa
+  server: https://sws.qa.aws.fao.org:8181
+  token: ee11ef7d-83b4-4326-a21d-c50875fc4f78
