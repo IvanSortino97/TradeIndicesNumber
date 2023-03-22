@@ -41,7 +41,7 @@ vignettes/*.pdf
 
 # yml debug token
 .yml
-*sws.yml
+/sws.yml
 
 # Certificate
 .key
