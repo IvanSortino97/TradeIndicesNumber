@@ -1,6 +1,7 @@
 # import item list from SWS Datatable
 
 TI_item_list <- ReadDatatable("ti_item_list")
+TI_multipliers <- ReadDatatable("ti_fob_cif_multipliers")
 
 # Convert to CPC
 
@@ -57,8 +58,11 @@ data_check = merge(data_FS,data_SWS, by = c("geographicAreaM49",
 data_check <- data_check[! Area %in% country_group_names, ]
 data_check <- data_check[,FS_Value := as.numeric(FS_Value)]
 data_check <- data_check[FS_Value != 0]
-data_check <- 
-
+data_check <- data_check[measuredElementTrade %in% key_elem]
+data_check <- data_check[measuredItemCPC %in% key_item]
+data_check[, diff := round(FS_Value - Value)] 
+View(data_check[is.na(Value) ,])
+unique(data_check[is.na(Value),]$Area)
 # keys <- list(key_geo,key_elem,key_item,key_year)
 # keys <- sapply(keys, '[', seq(max(sapply(keys, length))))
 # write.csv(keys, "keys.csv" )
