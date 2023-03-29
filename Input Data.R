@@ -10,6 +10,7 @@ tcl_code.cpc <- fcl2cpc(tcl_code)
 #tcl_code.cpc <- tcl_code.cpc %>% gsub(pattern = "'", replacement = "") %>% na.exclude() %>% as.character()
 TI_item_list[, CPC_code := tcl_code.cpc]
 #View(TI_item_list[is.na(CPC_code)])  # Missing CPC Codes
+write.csv(TI_item_list,"TI-item-list.csv")
 tcl_code.cpc <- tcl_code.cpc %>%  na.exclude() %>% as.character()
 
 #Import Trade Data From SWS 
@@ -66,4 +67,5 @@ unique(data_check[is.na(Value),]$Area)
 # keys <- list(key_geo,key_elem,key_item,key_year)
 # keys <- sapply(keys, '[', seq(max(sapply(keys, length))))
 # write.csv(keys, "keys.csv" )
+
 

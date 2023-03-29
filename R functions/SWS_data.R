@@ -35,9 +35,7 @@ SWS_data <- function(domain,
         dataset =  dataset,
         dimensions = dimensions)
     
-    system.time(Data <- GetData(DatasetKey))
-    
-    if (Flag == F){ Data[, c("flagObservationStatus","flagMethod"):= NULL ]}
+    if (Flag == T) {Data <- GetData(DatasetKey)} else {Data <- GetData(DatasetKey, flags = F)}
     
     return(Data)
     }
