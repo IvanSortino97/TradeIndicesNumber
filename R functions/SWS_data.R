@@ -20,6 +20,7 @@ SWS_data <- function(domain,
     } else {
     
     if (!is.list(keys)){ stop("keys parameter is not a list" )}
+        
     #-------------------------------------------------------------------------------
     
     dimensions = list()
@@ -40,5 +41,6 @@ SWS_data <- function(domain,
     return(Data)
     }
 }
+
 
 #-------------------------------------------------------------------------------

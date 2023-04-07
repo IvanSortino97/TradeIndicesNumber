@@ -107,22 +107,20 @@ TI_multipliers[is.na(end_year)]$end_year <-
 
 # Item group composition 
 
-TI_item_group <- ReadDatatable("ti_aggregation_table",
-                              where = c("var_type = 'item'"),
-                              columns = c("var_group_code",
-                                          "var_code",
-                                          "var_element",
-                                          "factor"))
+TI_item_group <- ReadDatatable("ti_item_group",
+                               columns = c('code_group_cpc',
+                                           'code_item_cpc',
+                                           'code_elem',
+                                           'factor'))
 
 setnames(TI_item_group,
-         old = "var_code",
+         old = "code_item_cpc",
          new = "measuredItemCPC")
 
-factor_diff <- unique(TI_item_group$var_element)
+factor_diff <- unique(TI_item_group$code_elem)
+TI_item_group[ code_elem == " ", code_elem := "Default" ]
 
-TI_item_group[ var_element == " ", var_element := "Default" ]
-
-TI_item_group <- dcast(TI_item_group, var_group_code + measuredItemCPC ~ var_element, value.var = "factor")
+TI_item_group <- dcast(TI_item_group, code_group_cpc + measuredItemCPC ~ code_elem, value.var = "factor")
 
 if ('5610' %in% factor_diff) TI_item_group[is.na(`5610`), `5610` := Default]
 if ('5910' %in% factor_diff) TI_item_group[is.na(`5910`), `5910` := Default]
@@ -131,52 +129,26 @@ if ('5922' %in% factor_diff) TI_item_group[is.na(`5922`), `5922` := Default]
 
 # Countries list
 
-TI_countries_list <- ReadDatatable("ti_country_list")
+TI_countries <-
+    fread("~/TradeIndicesNumber/FAOSTAT/TI-country-regions.csv")
+TI_countries$`M49 Code`[TI_countries$`M49 Code` == "156"] = "1248"
 
-TI_countries_list$m49_code[TI_countries_list$m49_code == "156"] = "1248"
-TI_countries_list[, m49_code := sub( "^0+","", m49_code )]
+# TI_countries_group <-
+#     fread("~/TradeIndicesNumber/FAOSTAT/TI-region aggregation.csv")
+# TI_countries_group$`M49 Code`[TI_countries_group$`M49 Code` == "156"] = "1248"
 
-setnames(TI_countries_list,
-         old = "m49_code",
-         new = "geographicAreaM49")
-
-# Countries group composition
-
-TI_countries_group <- ReadDatatable("ti_aggregation_table",
-                               where = c("var_type = 'area' AND factor <> '0'"),
-                               columns = c("var_group_code",
-                                           "var_code"))
-TI_countries_group[, var_group_code := sub( "^0+","", var_group_code )]
-TI_countries_group[, var_code := sub( "^0+","", var_code )]
-
-setnames(TI_countries_group,
-         old = "var_code",
-         new = "geographicAreaM49")
 
 
 # Pull Data from SWS ----------------------------------------------------------
 
 status_message("is puling data from SWS.")
 
-
-# 'Beet Pulp' item is saved under CPC code 39149.01 in FAOSTAT and code 39140.01 in SWS (' Beet Pulp ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "39149.01"] = "39140.01"
-
-# 'Fine animal hair, n.e.c.' is saved under CPC code 02943.90 in FAOSTAT and code 02943.02 in SWS (' Fine hair, n.e. ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "02943.90"] = "02943.02"
-
-# 'Juice of fruits n.e.c.' is saved under CPC code 21439.90 in FAOSTAT and code  in SWS (' Juice of fruits n.e. ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "21439.90"] = "21439.9"
-
-# 'Rice, paddy (rice milled equivalent)' is saved under CPC code F0030 in FAOSTAT and code 23161.02 in SWS (' Rice, Milled ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "F0030"] = "23161.02"
-
-
-#TI_item_list$measuredItemCPC[duplicated(TI_item_list$measuredItemCPC)]
-
 key_item = TI_item_list$measuredItemCPC
 
-key_geo = TI_countries_list$geographicAreaM49      
+key_geo = TI_countries$`M49 Code` %>%
+    as.character() %>%
+    sub(pattern = "^0+", replacement = "")
+key_geo = key_geo[!key_geo %in% "97"] # Need to add Europe in codelist
 
 key_elem = c('5610', '5622', '5910', '5922')
 
@@ -188,11 +160,18 @@ data_SWS = SWS_data(
     keys = list(key_geo, key_elem, key_item, key_year)
 )
 
-
-
 # Single Item -------------------------------------------------------------
 
-data_item.single <- data_SWS
+data_item.single <- data_SWS[, list(Value = sum(Value, na.rm = T)),
+                             by = c("measuredElementTrade",
+                                    "geographicAreaM49",
+                                    "timePointYears",
+                                    "ti_code")]
+
+data_item.single[, measuredItemCPC := fcl2cpc(str_pad(ti_code,
+                                                      width = 4,
+                                                      pad = "0"))]
+data_item.single <- data_item.single[!is.na(measuredItemCPC), ]
 
 # Area not FOB/CIF multiplier ---------------------------------------------
 
