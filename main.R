@@ -93,11 +93,13 @@ setnames(TI_item_list,
 # Multipliers for area not FOB/CIF, if the end_date is not specified in the
 # parameter table, it will be applied up to the current date
 
-TI_multipliers <- ReadDatatable("ti_fob_cif_multipliers",
-                                columns = c("areacode_m49",
-                                            "start_year",
-                                            "end_year",
-                                            "multiplier"))
+TI_multipliers <- ReadDatatable(
+    "ti_fob_cif_multipliers",
+    columns = c("areacode_m49",
+                "start_year",
+                "end_year",
+                "multiplier")
+)
 setnames(TI_multipliers,
          old = "areacode_m49",
          new = "geographicAreaM49")
@@ -105,14 +107,16 @@ TI_multipliers[is.na(end_year)]$end_year <-
     as.character(format(Sys.Date(),
                         format = "%Y"))
 
-# Item group composition 
+# Item group composition
 
-TI_item_group <- ReadDatatable("ti_aggregation_table",
-                              where = c("var_type = 'item'"),
-                              columns = c("var_group_code",
-                                          "var_code",
-                                          "var_element",
-                                          "factor"))
+TI_item_group <- ReadDatatable(
+    "ti_aggregation_table",
+    where = c("var_type = 'item'"),
+    columns = c("var_group_code",
+                "var_code",
+                "var_element",
+                "factor")
+)
 
 setnames(TI_item_group,
          old = "var_code",
@@ -120,21 +124,33 @@ setnames(TI_item_group,
 
 factor_diff <- unique(TI_item_group$var_element)
 
-TI_item_group[ var_element == " ", var_element := "Default" ]
+TI_item_group[var_element == " ", var_element := "Default"]
 
-TI_item_group <- dcast(TI_item_group, var_group_code + measuredItemCPC ~ var_element, value.var = "factor")
+TI_item_group <-
+    dcast(TI_item_group,
+          var_group_code + measuredItemCPC ~ var_element,
+          value.var = "factor")
 
-if ('5610' %in% factor_diff) TI_item_group[is.na(`5610`), `5610` := Default]
-if ('5910' %in% factor_diff) TI_item_group[is.na(`5910`), `5910` := Default]
-if ('5622' %in% factor_diff) TI_item_group[is.na(`5622`), `5622` := Default]
-if ('5922' %in% factor_diff) TI_item_group[is.na(`5922`), `5922` := Default]
+if ('5610' %in% factor_diff)
+    TI_item_group[is.na(`5610`), `5610` := Default]
+if ('5910' %in% factor_diff)
+    TI_item_group[is.na(`5910`), `5910` := Default]
+if ('5622' %in% factor_diff)
+    TI_item_group[is.na(`5622`), `5622` := Default]
+if ('5922' %in% factor_diff)
+    TI_item_group[is.na(`5922`), `5922` := Default]
 
 # Countries list
 
-TI_countries_list <- ReadDatatable("ti_country_list")
+TI_countries_list <- ReadDatatable("ti_country_list",
+                                   columns = c("m49_code",
+                                               "start_year",
+                                               "end_year"))
 
 TI_countries_list$m49_code[TI_countries_list$m49_code == "156"] = "1248"
-TI_countries_list[, m49_code := sub( "^0+","", m49_code )]
+TI_countries_list[, m49_code := sub("^0+", "", m49_code)]
+TI_countries_list[is.na(start_year)]$start_year = "1900"
+TI_countries_list[is.na(end_year)]$end_year = "9999"
 
 setnames(TI_countries_list,
          old = "m49_code",
@@ -142,12 +158,14 @@ setnames(TI_countries_list,
 
 # Countries group composition
 
-TI_countries_group <- ReadDatatable("ti_aggregation_table",
-                               where = c("var_type = 'area' AND factor <> '0'"),
-                               columns = c("var_group_code",
-                                           "var_code"))
-TI_countries_group[, var_group_code := sub( "^0+","", var_group_code )]
-TI_countries_group[, var_code := sub( "^0+","", var_code )]
+TI_countries_group <- ReadDatatable(
+    "ti_aggregation_table",
+    where = c("var_type = 'area' AND factor <> '0'"),
+    columns = c("var_group_code",
+                "var_code")
+)
+TI_countries_group[, var_group_code := sub("^0+", "", var_group_code)]
+TI_countries_group[, var_code := sub("^0+", "", var_code)]
 
 setnames(TI_countries_group,
          old = "var_code",
@@ -157,6 +175,9 @@ setnames(TI_countries_group,
 # Pull Data from SWS ----------------------------------------------------------
 
 status_message("is puling data from SWS.")
+
+
+## Wrong codes Patch - Need mapping Datatable #################################
 
 
 # 'Beet Pulp' item is saved under CPC code 39149.01 in FAOSTAT and code 39140.01 in SWS (' Beet Pulp ')
@@ -169,14 +190,17 @@ TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "02943.90"] = "0294
 TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "21439.90"] = "21439.9"
 
 # 'Rice, paddy (rice milled equivalent)' is saved under CPC code F0030 in FAOSTAT and code 23161.02 in SWS (' Rice, Milled ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "F0030"] = "23161.02"
+#TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "F0030"] = "23161.02"
+TI_item_list <- TI_item_list[!measuredItemCPC == "F0030", ]
+
+##### Need to change values also on item-group table ##########################
 
 
 #TI_item_list$measuredItemCPC[duplicated(TI_item_list$measuredItemCPC)]
 
 key_item = TI_item_list$measuredItemCPC
 
-key_geo = TI_countries_list$geographicAreaM49      
+key_geo = TI_countries_list$geographicAreaM49
 
 key_elem = c('5610', '5622', '5910', '5922')
 
@@ -189,6 +213,47 @@ data_SWS = SWS_data(
 )
 
 
+# Add Regions / Special Regions -------------------------------------------
+
+# Remove countries out of validity period
+
+data_SWS <- merge(data_SWS,
+                  TI_countries_list,
+                  by = "geographicAreaM49")
+
+data_SWS <- data_SWS[timePointYears <= end_year &
+                         timePointYears >= start_year, ]
+
+data_SWS <- data_SWS[, c('end_year', 'start_year') := NULL]
+
+# Aggregate by regions
+
+TI_countries_group <- split(TI_countries_group, TI_countries_group$var_group_code )
+
+atomic.merge <- function(grp, df1, df2) {
+    Merge <- merge(df1,
+                   df2[var_group_code == grp],
+                   by = c("geographicAreaM49"),
+                   #all.y = T,
+                   allow.cartesian = TRUE)
+    
+    Merge <- Merge[, Value := sum(Value, na.rm = T),
+                   by = c("var_group_code",
+                          "measuredElementTrade",
+                          "timePointYears",
+                          "measuredItemCPC")]
+    
+    Merge[, geographicAreaM49 := var_group_code]
+    Merge[, var_group_code := NULL]
+    Merge <- unique(Merge)
+    
+    return(Merge)
+}
+
+data_regions <- lapply(names(TI_countries_group), function(x) atomic.merge(x, data_SWS, TI_countries_group[[x]]))
+data_regions <- rbindlist(data_regions)
+
+data_SWS <- rbind(data_SWS,data_regions)
 
 # Single Item -------------------------------------------------------------
 
@@ -245,13 +310,13 @@ elem.461.491 <-
                             timePointYears,
                             Value)])
 
-elem.461.491.avg <- elem.461.491[timePointYears %in% base_periode,]
+elem.461.491.avg <- elem.461.491[timePointYears %in% base_periode, ]
 elem.461.491.avg <-
     elem.461.491.avg[, Mean := list(mean(Value, na.rm = T)),
                      by = c("measuredElementTrade",
                             "geographicAreaM49",
                             "measuredItemCPC")]
-elem.461.491.avg <- elem.461.491.avg[timePointYears == base_year,]
+elem.461.491.avg <- elem.461.491.avg[timePointYears == base_year, ]
 elem.461.491.avg <-
     elem.461.491.avg[, c('Value', 'timePointYears') := NULL]
 elem.461.491 <- merge(
@@ -357,13 +422,13 @@ elem.462.492 <-
                             timePointYears,
                             Value)])
 
-elem.462.492.avg <- elem.462.492[timePointYears %in% base_periode,]
+elem.462.492.avg <- elem.462.492[timePointYears %in% base_periode, ]
 elem.462.492.avg <-
     elem.462.492.avg[, Mean := list(mean(Value, na.rm = T)),
                      by = c("measuredElementTrade",
                             "geographicAreaM49",
                             "measuredItemCPC")]
-elem.462.492.avg <- elem.462.492.avg[timePointYears == base_year,]
+elem.462.492.avg <- elem.462.492.avg[timePointYears == base_year, ]
 elem.462.492.avg <-
     elem.462.492.avg[, c('Value', 'timePointYears') := NULL]
 elem.462.492 <- merge(
@@ -386,13 +451,13 @@ rm(elem.462.492)
 
 ## Element 464 - 494 -------------------------------------------------------
 
-elem.464.494 <- ELEMENTS$`64.94`[timePointYears %in% base_periode,]
+elem.464.494 <- ELEMENTS$`64.94`[timePointYears %in% base_periode, ]
 elem.464.494 <-
     elem.464.494[, Mean := list(mean(Value, na.rm = T)),
                  by = c("measuredElementTrade",
                         "geographicAreaM49",
                         "measuredItemCPC")]
-elem.464.494 <- elem.464.494[timePointYears == base_year,]
+elem.464.494 <- elem.464.494[timePointYears == base_year, ]
 elem.464.494 <- elem.464.494[, c('Value', 'timePointYears') := NULL]
 elem.464.494 <- merge(
     ELEMENTS$`64.94`,
@@ -415,13 +480,13 @@ rm(elem.464.494)
 
 ## Element 465 - 495 -------------------------------------------------------
 
-elem.465.495 <- ELEMENTS$`65.95`[timePointYears %in% base_periode,]
+elem.465.495 <- ELEMENTS$`65.95`[timePointYears %in% base_periode, ]
 elem.465.495 <-
     elem.465.495[, Mean := list(mean(Value, na.rm = T)),
                  by = c("measuredElementTrade",
                         "geographicAreaM49",
                         "measuredItemCPC")]
-elem.465.495 <- elem.465.495[timePointYears == base_year,]
+elem.465.495 <- elem.465.495[timePointYears == base_year, ]
 elem.465.495 <- elem.465.495[, c('Value', 'timePointYears') := NULL]
 elem.465.495 <- merge(
     ELEMENTS$`65.95`,
@@ -464,13 +529,13 @@ elem.461.491 <-
                           timePointYears,
                           Value)])
 
-elem.461.491.avg <- elem.461.491[timePointYears %in% base_periode,]
+elem.461.491.avg <- elem.461.491[timePointYears %in% base_periode, ]
 elem.461.491.avg <-
     elem.461.491.avg[, Mean := list(mean(Value, na.rm = T)),
                      by = c("measuredElementTrade",
                             "geographicAreaM49",
                             "measuredItemCPC")]
-elem.461.491.avg <- elem.461.491.avg[timePointYears == base_year,]
+elem.461.491.avg <- elem.461.491.avg[timePointYears == base_year, ]
 elem.461.491.avg <-
     elem.461.491.avg[, c('Value', 'timePointYears') := NULL]
 elem.461.491 <- merge(
@@ -576,13 +641,13 @@ elem.462.492 <-
                           timePointYears,
                           Value)])
 
-elem.462.492.avg <- elem.462.492[timePointYears %in% base_periode,]
+elem.462.492.avg <- elem.462.492[timePointYears %in% base_periode, ]
 elem.462.492.avg <-
     elem.462.492.avg[, Mean := list(mean(Value, na.rm = T)),
                      by = c("measuredElementTrade",
                             "geographicAreaM49",
                             "measuredItemCPC")]
-elem.462.492.avg <- elem.462.492.avg[timePointYears == base_year,]
+elem.462.492.avg <- elem.462.492.avg[timePointYears == base_year, ]
 elem.462.492.avg <-
     elem.462.492.avg[, c('Value', 'timePointYears') := NULL]
 elem.462.492 <- merge(
@@ -606,13 +671,13 @@ rm(elem.462.492)
 ## Aggr. Element 464 - 494 -------------------------------------------------------
 
 elem.464.494 <-
-    ELEMENTS.aggr$`64.94`[timePointYears %in% base_periode,]
+    ELEMENTS.aggr$`64.94`[timePointYears %in% base_periode, ]
 elem.464.494 <-
     elem.464.494[, Mean := list(mean(Value, na.rm = T)),
                  by = c("measuredElementTrade",
                         "geographicAreaM49",
                         "measuredItemCPC")]
-elem.464.494 <- elem.464.494[timePointYears == base_year,]
+elem.464.494 <- elem.464.494[timePointYears == base_year, ]
 elem.464.494 <- elem.464.494[, c('Value', 'timePointYears') := NULL]
 elem.464.494 <- merge(
     ELEMENTS.aggr$`64.94`,
@@ -636,13 +701,13 @@ rm(elem.464.494)
 ## Aggr. Element 465 - 495 -------------------------------------------------------
 
 elem.465.495 <-
-    ELEMENTS.aggr$`65.95`[timePointYears %in% base_periode,]
+    ELEMENTS.aggr$`65.95`[timePointYears %in% base_periode, ]
 elem.465.495 <-
     elem.465.495[, Mean := list(mean(Value, na.rm = T)),
                  by = c("measuredElementTrade",
                         "geographicAreaM49",
                         "measuredItemCPC")]
-elem.465.495 <- elem.465.495[timePointYears == base_year,]
+elem.465.495 <- elem.465.495[timePointYears == base_year, ]
 elem.465.495 <- elem.465.495[, c('Value', 'timePointYears') := NULL]
 elem.465.495 <- merge(
     ELEMENTS.aggr$`65.95`,
@@ -666,4 +731,3 @@ rm(elem.465.495)
 # Merge Results -----------------------------------------------------------
 
 ELEMENTS.aggr <- do.call("rbind", ELEMENTS.aggr)
-

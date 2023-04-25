@@ -15,6 +15,7 @@ SWS_data <- function(domain,
                          paste(1:ndim, dimension_name, sep = ". ")))
       
         # error if not enough keys provided --------------------------------------------
+        
         if (length(keys) != ndim & !is.null(keys)) { stop("Different number of dimentions") }
           
     } else {
