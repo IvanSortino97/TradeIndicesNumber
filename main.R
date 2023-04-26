@@ -13,10 +13,6 @@ status_message("has started.")
 # Loading libraries ------------------------------------------------------------
 
 status_message("is loading libraries.")
-message(paste(
-    c("Your", plugin_name, "Plugin is loading libraries."),
-    collapse = " "
-))
 
 if (env == "QA")
     .libPaths("/newhome/shared/R/3.3.3/lib")
@@ -171,32 +167,64 @@ setnames(TI_countries_group,
          old = "var_code",
          new = "geographicAreaM49")
 
+# Conversion table for codes mapping patch
+
+TI_convertion = ReadDatatable("ti_code_conversion", 
+                              columns = c("faostat_code",
+                                          "sws_code"))
+
+# Patch items codes -----------------------------------------------------------
+
+# 'Beet Pulp' item is saved under CPC code 39149.01 in FAOSTAT and code 39140.01 in SWS (' Beet Pulp ')
+# 'Fine animal hair, n.e.c.' is saved under CPC code 02943.90 in FAOSTAT and code 02943.02 in SWS (' Fine hair, n.e. ')
+# 'Juice of fruits n.e.c.' is saved under CPC code 21439.90 in FAOSTAT and code  in SWS (' Juice of fruits n.e. ')
+# 'Rice, paddy (rice milled equivalent)' is saved under CPC code F0030 in FAOSTAT and code 23161.02 in SWS (' Rice, Milled ')
+
+status_message("is correcting CPC codes.")
+
+TI_item_list <- ReadDatatable("ti_item_list")
+setnames(TI_item_list,
+         old = "cpc_code",
+         new = "measuredItemCPC")
+
+switch_code <- function(DT,COL,OLD,NEW) {
+    
+    dt <- as.data.frame(DT)
+    dt[which(dt[, which(names(dt) == COL)] == OLD ), which(names(dt) == COL)] = NEW
+    dt <- as.data.table(dt)
+    return(dt)
+    
+}
+
+
+
+for (i in 1:nrow(TI_convertion)) {
+    
+    TI_item_list <- switch_code(TI_item_list,
+                                'measuredItemCPC',
+                                as.character(TI_convertion[i,1,with = F]),
+                                as.character(TI_convertion[i,2,with = F]))
+}
+
+TI_item_list = TI_item_list[! duplicated(TI_item_list$measuredItemCPC)]
+
+if (any(TI_convertion$sws_code %in% TI_item_group$measuredItemCPC) ) {
+    TI_item_group = TI_item_group[
+        !measuredItemCPC == TI_convertion$faostat_code[
+            TI_convertion$sws_code %in% TI_item_group$measuredItemCPC]]}
+
+for (i in 1:nrow(TI_convertion)) {
+    
+    TI_item_group <- switch_code(TI_item_group,
+                                 'measuredItemCPC',
+                                 as.character(TI_convertion[i,1,with = F]),
+                                 as.character(TI_convertion[i,2,with = F]))
+}
 
 # Pull Data from SWS ----------------------------------------------------------
 
-status_message("is puling data from SWS.")
+status_message("is pulling data from SWS.")
 
-
-## Wrong codes Patch - Need mapping Datatable #################################
-
-
-# 'Beet Pulp' item is saved under CPC code 39149.01 in FAOSTAT and code 39140.01 in SWS (' Beet Pulp ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "39149.01"] = "39140.01"
-
-# 'Fine animal hair, n.e.c.' is saved under CPC code 02943.90 in FAOSTAT and code 02943.02 in SWS (' Fine hair, n.e. ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "02943.90"] = "02943.02"
-
-# 'Juice of fruits n.e.c.' is saved under CPC code 21439.90 in FAOSTAT and code  in SWS (' Juice of fruits n.e. ')
-TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "21439.90"] = "21439.9"
-
-# 'Rice, paddy (rice milled equivalent)' is saved under CPC code F0030 in FAOSTAT and code 23161.02 in SWS (' Rice, Milled ')
-#TI_item_list$measuredItemCPC[TI_item_list$measuredItemCPC == "F0030"] = "23161.02"
-TI_item_list <- TI_item_list[!measuredItemCPC == "F0030", ]
-
-##### Need to change values also on item-group table ##########################
-
-
-#TI_item_list$measuredItemCPC[duplicated(TI_item_list$measuredItemCPC)]
 
 key_item = TI_item_list$measuredItemCPC
 
@@ -215,6 +243,8 @@ data_SWS = SWS_data(
 
 # Add Regions / Special Regions -------------------------------------------
 
+status_message("is calculating Regions aggregates.")
+
 # Remove countries out of validity period
 
 data_SWS <- merge(data_SWS,
@@ -230,7 +260,8 @@ data_SWS <- data_SWS[, c('end_year', 'start_year') := NULL]
 
 TI_countries_group <- split(TI_countries_group, TI_countries_group$var_group_code )
 
-atomic.merge <- function(grp, df1, df2) {
+atomic.merge <- function(grp, df1, df2, var) {
+    
     Merge <- merge(df1,
                    df2[var_group_code == grp],
                    by = c("geographicAreaM49"),
@@ -245,35 +276,36 @@ atomic.merge <- function(grp, df1, df2) {
     
     Merge[, geographicAreaM49 := var_group_code]
     Merge[, var_group_code := NULL]
-    Merge <- unique(Merge)
+    Merge <- unique(Merge) 
     
     return(Merge)
 }
 
-data_regions <- lapply(names(TI_countries_group), function(x) atomic.merge(x, data_SWS, TI_countries_group[[x]]))
+data_regions <- lapply(names(TI_countries_group),
+                       function(x) atomic.merge(x, data_SWS, TI_countries_group[[x]]))
 data_regions <- rbindlist(data_regions)
 
 data_SWS <- rbind(data_SWS,data_regions)
 
-# Single Item -------------------------------------------------------------
-
-data_item.single <- data_SWS
+rm(data_regions)
 
 # Area not FOB/CIF multiplier ---------------------------------------------
 
+data_SWS <- merge(data_SWS,
+                  TI_multipliers,
+                  by = "geographicAreaM49",
+                  all.x = T)
 
-data_item.single <- merge(data_item.single,
-                          TI_multipliers,
-                          by = "geographicAreaM49",
-                          all.x = T)
+data_SWS[timePointYears >= start_year &
+             timePointYears <= end_year &
+             measuredElementTrade == "5622",
+         Value := Value * as.numeric(multiplier)]
 
-data_item.single[timePointYears >= start_year &
-                     timePointYears <= end_year &
-                     measuredElementTrade == "5622",
-                 Value := Value * as.numeric(multiplier)]
+data_SWS[, c("start_year", "end_year", "multiplier") := NULL]
 
 # Item aggregated  --------------------------------------------------------
 
+status_message("is calculating item aggregates.")
 
 data_item.aggr <- merge(data_SWS[, .(measuredElementTrade,
                                      geographicAreaM49,
@@ -283,15 +315,29 @@ data_item.aggr <- merge(data_SWS[, .(measuredElementTrade,
                         TI_item_group,
                         by = "measuredItemCPC",
                         allow.cartesian = TRUE)
+
+for (i in c('5610','5910','5622','5922')) {
+    
+    if (i %in% factor_diff)
+        data_item.aggr[measuredElementTrade == i , Value2 := Value * as.numeric(get(i))]
+}
+
+`%!in%` = Negate(`%in%`)
+
+data_item.aggr[measuredElementTrade %!in% factor_diff, Value3 := Value * as.numeric(Default)]
+
 data_item.aggr <-
     data_item.aggr[, list(Value = sum(Value, na.rm = T)),
                    by = c("measuredElementTrade",
                           "geographicAreaM49",
                           "timePointYears",
-                          "sws_group_code")]
+                          "var_group_code")]
 
-setnames(data_item.aggr, "sws_group_code", "measuredItemCPC")
+setnames(data_item.aggr, "var_group_code", "measuredItemCPC")
 
+data_SWS <- rbind(data_SWS, data_item.aggr)
+
+rm(data_item.aggr)
 
 # Calculations  -----------------------------------------------------------
 
@@ -300,6 +346,9 @@ status_message("is caluculating selected elements.")
 ELEMENTS <- list()
 
 ## Element 461 - 491 -------------------------------------------------------
+
+elem.461.491 <- setDT(data_SWS)
+elem.461.491 <- elem.461.491[measuredElementTrade %in% c("5610", "5910")]
 
 
 elem.461.491 <-
