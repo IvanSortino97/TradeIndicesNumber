@@ -1,16 +1,39 @@
+START <- Sys.time()
+
 # Plugin settings --------------------------------------------------------------
 
 plugin_name = "Trade Indices Numbers"
 wd = "~/TradeIndicesNumber" # Rstudio Directory
 env = "PROD" # QA, PROD or SWS
 
+# Status function --------------------------------------------------------------
+
 status_message <-
-    function(text) {
-        message(paste(c("Your", plugin_name, "Plugin", text), collapse = " "))
+    function(text = NULL, time = NULL) {
+        if (!is.null(text)) {
+            if (text == "ok") {
+                message(paste0(" - Done", "\n"))
+            } else {
+                message(paste(
+                    c("Your", plugin_name, "Plugin", text),
+                    collapse = " "
+                ))
+                return(invisible(Sys.time()))
+            }
+            
+        }
+        
+        if (!is.null(time)) {
+            message(paste0(" - Done : ", format(Sys.time() - time), "\n"))
+        }
     }
-status_message("has started.")
+
+ok = "ok"
 
 # Loading libraries ------------------------------------------------------------
+
+
+status_message("has started.")
 
 status_message("is loading libraries.")
 
@@ -29,7 +52,6 @@ suppressMessages({
     library(dplyr)
     library(methods)
 })
-
 
 # Setting the environment ------------------------------------------------------
 
@@ -52,6 +74,8 @@ if (CheckDebug()) {
     })
 }
 
+status_message(ok)
+
 # Dataset chosen  --------------------------------------------------------------
 
 domain_ = swsContext.datasets[[1]]@domain
@@ -59,7 +83,7 @@ dataset_ = swsContext.datasets[[1]]@dataset
 
 # Parameters -------------------------------------------------------------------
 
-status_message("is reading its parameters.")
+time <- status_message("is reading its parameters.")
 
 # Plugin parameters
 
@@ -74,10 +98,11 @@ base_periode = as.character(c(base_year - 1,
 
 # swsContext.datasets[[1]]@dimensions[["measuredElement"]]@keys
 
+status_message(time = time)
 
 # Support Datatables
 
-status_message("is reading support datatables.")
+time <- status_message("is reading support datatables.")
 
 # Item list, according to QCL domain in FAOSTAT
 
@@ -127,14 +152,14 @@ TI_item_group <-
           var_group_code + measuredItemCPC ~ var_element,
           value.var = "factor")
 
-if ('5610' %in% factor_diff)
-    TI_item_group[is.na(`5610`), `5610` := Default]
-if ('5910' %in% factor_diff)
-    TI_item_group[is.na(`5910`), `5910` := Default]
-if ('5622' %in% factor_diff)
-    TI_item_group[is.na(`5622`), `5622` := Default]
-if ('5922' %in% factor_diff)
-    TI_item_group[is.na(`5922`), `5922` := Default]
+for (i in c('5610', '5910', '5622', '5922')) {
+    if (i %in% factor_diff) {
+        eval(parse(
+            text =
+                paste0("TI_item_group[is.na(`", i, "`), `", i, "` := Default]")
+        ))
+    }
+}
 
 # Countries list
 
@@ -169,9 +194,11 @@ setnames(TI_countries_group,
 
 # Conversion table for codes mapping patch
 
-TI_convertion = ReadDatatable("ti_code_conversion", 
+TI_convertion = ReadDatatable("ti_code_conversion",
                               columns = c("faostat_code",
                                           "sws_code"))
+
+status_message(time = time)
 
 # Patch items codes -----------------------------------------------------------
 
@@ -187,43 +214,43 @@ setnames(TI_item_list,
          old = "cpc_code",
          new = "measuredItemCPC")
 
-switch_code <- function(DT,COL,OLD,NEW) {
-    
+switch_code <- function(DT, COL, OLD, NEW) {
     dt <- as.data.frame(DT)
-    dt[which(dt[, which(names(dt) == COL)] == OLD ), which(names(dt) == COL)] = NEW
+    dt[which(dt[, which(names(dt) == COL)] == OLD), which(names(dt) == COL)] = NEW
     dt <- as.data.table(dt)
     return(dt)
     
 }
 
-
-
 for (i in 1:nrow(TI_convertion)) {
-    
-    TI_item_list <- switch_code(TI_item_list,
-                                'measuredItemCPC',
-                                as.character(TI_convertion[i,1,with = F]),
-                                as.character(TI_convertion[i,2,with = F]))
+    TI_item_list <- switch_code(
+        TI_item_list,
+        'measuredItemCPC',
+        as.character(TI_convertion[i, 1, with = F]),
+        as.character(TI_convertion[i, 2, with = F])
+    )
 }
 
-TI_item_list = TI_item_list[! duplicated(TI_item_list$measuredItemCPC)]
+TI_item_list = TI_item_list[!duplicated(TI_item_list$measuredItemCPC)]
 
-if (any(TI_convertion$sws_code %in% TI_item_group$measuredItemCPC) ) {
-    TI_item_group = TI_item_group[
-        !measuredItemCPC == TI_convertion$faostat_code[
-            TI_convertion$sws_code %in% TI_item_group$measuredItemCPC]]}
+if (any(TI_convertion$sws_code %in% TI_item_group$measuredItemCPC)) {
+    TI_item_group = TI_item_group[!measuredItemCPC == TI_convertion$faostat_code[TI_convertion$sws_code %in% TI_item_group$measuredItemCPC]]
+}
 
 for (i in 1:nrow(TI_convertion)) {
-    
-    TI_item_group <- switch_code(TI_item_group,
-                                 'measuredItemCPC',
-                                 as.character(TI_convertion[i,1,with = F]),
-                                 as.character(TI_convertion[i,2,with = F]))
+    TI_item_group <- switch_code(
+        TI_item_group,
+        'measuredItemCPC',
+        as.character(TI_convertion[i, 1, with = F]),
+        as.character(TI_convertion[i, 2, with = F])
+    )
 }
+
+status_message(ok)
 
 # Pull Data from SWS ----------------------------------------------------------
 
-status_message("is pulling data from SWS.")
+time <- status_message("is pulling data from SWS.")
 
 
 key_item = TI_item_list$measuredItemCPC
@@ -233,17 +260,15 @@ key_geo = TI_countries_list$geographicAreaM49
 key_elem = c('5610', '5622', '5910', '5922')
 
 key_year = 2014:2019
+if (base_year)
+    
+    data_SWS = SWS_data(
+        domain = "trade",
+        dataset = "total_trade_cpc_m49",
+        keys = list(key_geo, key_elem, key_item, key_year)
+    )
 
-data_SWS = SWS_data(
-    domain = "trade",
-    dataset = "total_trade_cpc_m49",
-    keys = list(key_geo, key_elem, key_item, key_year)
-)
 
-
-# Add Regions / Special Regions -------------------------------------------
-
-status_message("is calculating Regions aggregates.")
 
 # Remove countries out of validity period
 
@@ -256,40 +281,58 @@ data_SWS <- data_SWS[timePointYears <= end_year &
 
 data_SWS <- data_SWS[, c('end_year', 'start_year') := NULL]
 
+status_message(time = time)
+
+# Add Regions / Special Regions -------------------------------------------
+
+time <- status_message("is calculating Regions aggregates.")
+
 # Aggregate by regions
 
-TI_countries_group <- split(TI_countries_group, TI_countries_group$var_group_code )
+# TI_countries_group <- split(TI_countries_group, TI_countries_group$var_group_code )
 
-atomic.merge <- function(grp, df1, df2, var) {
-    
-    Merge <- merge(df1,
-                   df2[var_group_code == grp],
-                   by = c("geographicAreaM49"),
-                   #all.y = T,
-                   allow.cartesian = TRUE)
-    
-    Merge <- Merge[, Value := sum(Value, na.rm = T),
-                   by = c("var_group_code",
-                          "measuredElementTrade",
-                          "timePointYears",
-                          "measuredItemCPC")]
-    
-    Merge[, geographicAreaM49 := var_group_code]
-    Merge[, var_group_code := NULL]
-    Merge <- unique(Merge) 
-    
-    return(Merge)
-}
+# setkey(TI_countries_group, geographicAreaM49)
+# setkey(data_SWS, geographicAreaM49)
+#
+# data_merged <-  data_SWS[TI_countries_group,  allow.cartesian=TRUE ]
 
-data_regions <- lapply(names(TI_countries_group),
-                       function(x) atomic.merge(x, data_SWS, TI_countries_group[[x]]))
-data_regions <- rbindlist(data_regions)
+# atomic.merge <- function(grp, df1, df2, var) {
+#
+#     Merge <- merge(df1,
+#                    df2[var_group_code == grp],
+#                    by = c("geographicAreaM49"),
+#                    #all.y = T,
+#                    allow.cartesian = TRUE)
+#
+#     Merge <- Merge[, Value := sum(Value, na.rm = T),
+#                    by = c("var_group_code",
+#                           "measuredElementTrade",
+#                           "timePointYears",
+#                           "measuredItemCPC")]
+#
+#     Merge[, geographicAreaM49 := var_group_code]
+#     Merge[, var_group_code := NULL]
+#     Merge <- unique(Merge)
+#
+#     return(Merge)
+# }
+#
+# data_regions <- lapply(names(TI_countries_group),
+#                        function(x) atomic.merge(x, data_SWS, TI_countries_group[[x]]))
+# data_regions <- rbindlist(data_regions)
 
-data_SWS <- rbind(data_SWS,data_regions)
 
-rm(data_regions)
+
+data_SWS <-
+    rbind(data_SWS, regions_aggregate(data_SWS, TI_countries_group))
+
+#rm(data_regions)
+
+status_message(time = time)
 
 # Area not FOB/CIF multiplier ---------------------------------------------
+
+status_message("is applying Area not FOB/CIF multiplier.")
 
 data_SWS <- merge(data_SWS,
                   TI_multipliers,
@@ -303,41 +346,16 @@ data_SWS[timePointYears >= start_year &
 
 data_SWS[, c("start_year", "end_year", "multiplier") := NULL]
 
+status_message(ok)
+
 # Item aggregated  --------------------------------------------------------
 
-status_message("is calculating item aggregates.")
+time = status_message("is calculating item aggregates.")
 
-data_item.aggr <- merge(data_SWS[, .(measuredElementTrade,
-                                     geographicAreaM49,
-                                     measuredItemCPC,
-                                     timePointYears,
-                                     Value)],
-                        TI_item_group,
-                        by = "measuredItemCPC",
-                        allow.cartesian = TRUE)
+data_SWS <-
+    rbind(data_SWS, items_aggregate(data_SWS, TI_item_group))
 
-for (i in c('5610','5910','5622','5922')) {
-    
-    if (i %in% factor_diff)
-        data_item.aggr[measuredElementTrade == i , Value2 := Value * as.numeric(get(i))]
-}
-
-`%!in%` = Negate(`%in%`)
-
-data_item.aggr[measuredElementTrade %!in% factor_diff, Value3 := Value * as.numeric(Default)]
-
-data_item.aggr <-
-    data_item.aggr[, list(Value = sum(Value, na.rm = T)),
-                   by = c("measuredElementTrade",
-                          "geographicAreaM49",
-                          "timePointYears",
-                          "var_group_code")]
-
-setnames(data_item.aggr, "var_group_code", "measuredItemCPC")
-
-data_SWS <- rbind(data_SWS, data_item.aggr)
-
-rm(data_item.aggr)
+status_message(time = time)
 
 # Calculations  -----------------------------------------------------------
 
@@ -347,27 +365,19 @@ ELEMENTS <- list()
 
 ## Element 461 - 491 -------------------------------------------------------
 
-elem.461.491 <- setDT(data_SWS)
-elem.461.491 <- elem.461.491[measuredElementTrade %in% c("5610", "5910")]
-
-
 elem.461.491 <-
-    copy(data_item.single[measuredElementTrade %in% c("5610", "5910"),
-                          .(measuredElementTrade,
-                            geographicAreaM49,
-                            measuredItemCPC,
-                            timePointYears,
-                            Value)])
+    setDT(data_SWS[measuredElementTrade %in% c("5610", "5910")])
 
-elem.461.491.avg <- elem.461.491[timePointYears %in% base_periode, ]
+elem.461.491.avg <-
+    setDT(elem.461.491[timePointYears %in% base_periode, ])
 elem.461.491.avg <-
     elem.461.491.avg[, Mean := list(mean(Value, na.rm = T)),
                      by = c("measuredElementTrade",
                             "geographicAreaM49",
                             "measuredItemCPC")]
-elem.461.491.avg <- elem.461.491.avg[timePointYears == base_year, ]
 elem.461.491.avg <-
-    elem.461.491.avg[, c('Value', 'timePointYears') := NULL]
+    elem.461.491.avg[timePointYears == base_year, ][, c('Value', 'timePointYears') := NULL]
+
 elem.461.491 <- merge(
     elem.461.491,
     elem.461.491.avg,
@@ -377,9 +387,10 @@ elem.461.491 <- merge(
         "measuredItemCPC"
     )
 )
+
 rm(elem.461.491.avg)
-elem.461.491[, Value := Value / Mean]
-elem.461.491[, Mean := NULL]
+elem.461.491[, Value := Value / Mean][, Mean := NULL]
+
 elem.461.491[measuredElementTrade == "5610"]$measuredElementTrade = "461"
 elem.461.491[measuredElementTrade == "5910"]$measuredElementTrade = "491"
 
@@ -389,12 +400,7 @@ rm(elem.461.491)
 ## Element 64 - 94  --------------------------------------------------------
 
 elem.64.94 <-
-    copy(data_item.single[measuredElementTrade %in% c("5622", "5922"),
-                          .(measuredElementTrade,
-                            geographicAreaM49,
-                            measuredItemCPC,
-                            timePointYears,
-                            Value)])
+    setDT(data_SWS[measuredElementTrade %in% c("5622", "5922")])
 
 # Change elements code to match the merge keys
 elem.64.94[measuredElementTrade == "5622"]$measuredElementTrade = "461"
@@ -411,8 +417,7 @@ elem.64.94 <- merge(
     )
 )
 
-elem.64.94[, Value := Value.x / Value.y]
-elem.64.94[, c("Value.x", "Value.y") := NULL]
+elem.64.94[, Value := Value.x / Value.y][, c("Value.x", "Value.y") := NULL]
 
 elem.64.94[measuredElementTrade == "461"]$measuredElementTrade = "64"
 elem.64.94[measuredElementTrade == "491"]$measuredElementTrade = "94"
@@ -423,21 +428,16 @@ rm(elem.64.94)
 ## Elements 65 - 95 --------------------------------------------------------
 
 elem.65.95 <-
-    copy(data_item.single[measuredElementTrade %in% c("5622", "5922") &
-                              timePointYears %in% base_periode,
-                          .(measuredElementTrade,
-                            geographicAreaM49,
-                            measuredItemCPC,
-                            timePointYears,
-                            Value)])
+    setDT(data_SWS[measuredElementTrade %in% c("5622", "5922") &
+                       timePointYears %in% base_periode])
 
 elem.65.95 <- elem.65.95[, Value := list(mean(Value, na.rm = T)),
                          by = c("measuredElementTrade",
                                 "geographicAreaM49",
                                 "measuredItemCPC")]
 
-elem.65.95 <- elem.65.95[timePointYears == base_year]
-elem.65.95 <- elem.65.95[, c('timePointYears') := NULL]
+elem.65.95 <-
+    elem.65.95[timePointYears == base_year][, c('timePointYears') := NULL]
 
 elem.65.95[measuredElementTrade == "5622"]$measuredElementTrade = "461"
 elem.65.95[measuredElementTrade == "5922"]$measuredElementTrade = "491"
@@ -452,8 +452,7 @@ elem.65.95 <- merge(
     ),
     all.x = T
 )
-elem.65.95[, Value := Value.x * Value.y]
-elem.65.95[, c("Value.x", "Value.y") := NULL]
+elem.65.95[, Value := Value.x * Value.y][, c("Value.x", "Value.y") := NULL]
 
 elem.65.95[measuredElementTrade == "461"]$measuredElementTrade = "65"
 elem.65.95[measuredElementTrade == "491"]$measuredElementTrade = "95"
@@ -464,22 +463,17 @@ rm(elem.65.95)
 ## Element 462 - 492  ------------------------------------------------------
 
 elem.462.492 <-
-    copy(data_item.single[measuredElementTrade %in% c("5622", "5922"),
-                          .(measuredElementTrade,
-                            geographicAreaM49,
-                            measuredItemCPC,
-                            timePointYears,
-                            Value)])
+    setDT(data_SWS[measuredElementTrade %in% c("5622", "5922")])
 
-elem.462.492.avg <- elem.462.492[timePointYears %in% base_periode, ]
+elem.462.492.avg <-
+    setDT(elem.462.492[timePointYears %in% base_periode])
 elem.462.492.avg <-
     elem.462.492.avg[, Mean := list(mean(Value, na.rm = T)),
                      by = c("measuredElementTrade",
                             "geographicAreaM49",
                             "measuredItemCPC")]
-elem.462.492.avg <- elem.462.492.avg[timePointYears == base_year, ]
 elem.462.492.avg <-
-    elem.462.492.avg[, c('Value', 'timePointYears') := NULL]
+    elem.462.492.avg[timePointYears == base_year, ][, c('Value', 'timePointYears') := NULL]
 elem.462.492 <- merge(
     elem.462.492,
     elem.462.492.avg,
@@ -490,8 +484,8 @@ elem.462.492 <- merge(
     )
 )
 rm(elem.462.492.avg)
-elem.462.492[, Value := (Value * 100) / Mean]
-elem.462.492[, Mean := NULL]
+elem.462.492[, Value := (Value * 100) / Mean][, Mean := NULL]
+
 elem.462.492[measuredElementTrade == "5622"]$measuredElementTrade = "462"
 elem.462.492[measuredElementTrade == "5922"]$measuredElementTrade = "492"
 
@@ -506,8 +500,8 @@ elem.464.494 <-
                  by = c("measuredElementTrade",
                         "geographicAreaM49",
                         "measuredItemCPC")]
-elem.464.494 <- elem.464.494[timePointYears == base_year, ]
-elem.464.494 <- elem.464.494[, c('Value', 'timePointYears') := NULL]
+elem.464.494 <-
+    elem.464.494[timePointYears == base_year, ][, c('Value', 'timePointYears') := NULL]
 elem.464.494 <- merge(
     ELEMENTS$`64.94`,
     elem.464.494,
@@ -518,8 +512,7 @@ elem.464.494 <- merge(
     )
 )
 
-elem.464.494[, Value := (Value * 100) / Mean]
-elem.464.494[, Mean := NULL]
+elem.464.494[, Value := (Value * 100) / Mean][, Mean := NULL]
 
 elem.464.494[measuredElementTrade == "64"]$measuredElementTrade = "464"
 elem.464.494[measuredElementTrade == "94"]$measuredElementTrade = "494"
@@ -535,8 +528,8 @@ elem.465.495 <-
                  by = c("measuredElementTrade",
                         "geographicAreaM49",
                         "measuredItemCPC")]
-elem.465.495 <- elem.465.495[timePointYears == base_year, ]
-elem.465.495 <- elem.465.495[, c('Value', 'timePointYears') := NULL]
+elem.465.495 <-
+    elem.465.495[timePointYears == base_year, ][, c('Value', 'timePointYears') := NULL]
 elem.465.495 <- merge(
     ELEMENTS$`65.95`,
     elem.465.495,
@@ -547,8 +540,7 @@ elem.465.495 <- merge(
     )
 )
 
-elem.465.495[, Value := (Value * 100) / Mean]
-elem.465.495[, Mean := NULL]
+elem.465.495[, Value := (Value * 100) / Mean][, Mean := NULL]
 
 elem.465.495[measuredElementTrade == "65"]$measuredElementTrade = "465"
 elem.465.495[measuredElementTrade == "95"]$measuredElementTrade = "495"
@@ -561,222 +553,8 @@ rm(elem.465.495)
 ELEMENTS <- do.call("rbind", ELEMENTS)
 
 
-# Aggregated Items Elements -----------------------------------------------
+# Save data ---------------------------------------------------------------
 
-status_message("is caluculating aggregated elements.")
-
-ELEMENTS.aggr <- list()
-
-## Aggr. Element 461 - 491 -------------------------------------------------------
+status_message("is saving data.")
 
 
-elem.461.491 <-
-    copy(data_item.aggr[measuredElementTrade %in% c("5610", "5910"),
-                        .(measuredElementTrade,
-                          geographicAreaM49,
-                          measuredItemCPC,
-                          timePointYears,
-                          Value)])
-
-elem.461.491.avg <- elem.461.491[timePointYears %in% base_periode, ]
-elem.461.491.avg <-
-    elem.461.491.avg[, Mean := list(mean(Value, na.rm = T)),
-                     by = c("measuredElementTrade",
-                            "geographicAreaM49",
-                            "measuredItemCPC")]
-elem.461.491.avg <- elem.461.491.avg[timePointYears == base_year, ]
-elem.461.491.avg <-
-    elem.461.491.avg[, c('Value', 'timePointYears') := NULL]
-elem.461.491 <- merge(
-    elem.461.491,
-    elem.461.491.avg,
-    by = c(
-        "measuredElementTrade",
-        "geographicAreaM49",
-        "measuredItemCPC"
-    )
-)
-rm(elem.461.491.avg)
-elem.461.491[, Value := Value / Mean]
-elem.461.491[, Mean := NULL]
-elem.461.491[measuredElementTrade == "5610"]$measuredElementTrade = "461"
-elem.461.491[measuredElementTrade == "5910"]$measuredElementTrade = "491"
-
-ELEMENTS.aggr[["461.491"]] <- elem.461.491
-rm(elem.461.491)
-
-## Aggr. Element 64 - 94  --------------------------------------------------------
-
-elem.64.94 <-
-    copy(data_item.aggr[measuredElementTrade %in% c("5622", "5922"),
-                        .(measuredElementTrade,
-                          geographicAreaM49,
-                          measuredItemCPC,
-                          timePointYears,
-                          Value)])
-
-# Change elements code to match the merge keys
-elem.64.94[measuredElementTrade == "5622"]$measuredElementTrade = "461"
-elem.64.94[measuredElementTrade == "5922"]$measuredElementTrade = "491"
-
-elem.64.94 <- merge(
-    elem.64.94,
-    ELEMENTS.aggr$`461.491`,
-    by = c(
-        "measuredElementTrade",
-        "geographicAreaM49",
-        "measuredItemCPC",
-        "timePointYears"
-    )
-)
-
-elem.64.94[, Value := Value.x / Value.y]
-elem.64.94[, c("Value.x", "Value.y") := NULL]
-
-elem.64.94[measuredElementTrade == "461"]$measuredElementTrade = "64"
-elem.64.94[measuredElementTrade == "491"]$measuredElementTrade = "94"
-
-ELEMENTS.aggr[["64.94"]] <- elem.64.94
-rm(elem.64.94)
-
-## Aggr. Element 65 - 95 --------------------------------------------------------
-
-elem.65.95 <-
-    copy(data_item.aggr[measuredElementTrade %in% c("5622", "5922") &
-                            timePointYears %in% base_periode,
-                        .(measuredElementTrade,
-                          geographicAreaM49,
-                          measuredItemCPC,
-                          timePointYears,
-                          Value)])
-
-elem.65.95 <- elem.65.95[, Value := list(mean(Value, na.rm = T)),
-                         by = c("measuredElementTrade",
-                                "geographicAreaM49",
-                                "measuredItemCPC")]
-
-elem.65.95 <- elem.65.95[timePointYears == base_year]
-elem.65.95 <- elem.65.95[, c('timePointYears') := NULL]
-
-elem.65.95[measuredElementTrade == "5622"]$measuredElementTrade = "461"
-elem.65.95[measuredElementTrade == "5922"]$measuredElementTrade = "491"
-
-elem.65.95 <- merge(
-    ELEMENTS.aggr$`461.491`,
-    elem.65.95,
-    by = c(
-        "measuredElementTrade",
-        "geographicAreaM49",
-        "measuredItemCPC"
-    ),
-    all.x = T
-)
-elem.65.95[, Value := Value.x * Value.y]
-elem.65.95[, c("Value.x", "Value.y") := NULL]
-
-elem.65.95[measuredElementTrade == "461"]$measuredElementTrade = "65"
-elem.65.95[measuredElementTrade == "491"]$measuredElementTrade = "95"
-
-ELEMENTS.aggr[["65.95"]] <- elem.65.95
-rm(elem.65.95)
-
-## Aggr. Element 462 - 492  ------------------------------------------------------
-
-elem.462.492 <-
-    copy(data_item.aggr[measuredElementTrade %in% c("5622", "5922"),
-                        .(measuredElementTrade,
-                          geographicAreaM49,
-                          measuredItemCPC,
-                          timePointYears,
-                          Value)])
-
-elem.462.492.avg <- elem.462.492[timePointYears %in% base_periode, ]
-elem.462.492.avg <-
-    elem.462.492.avg[, Mean := list(mean(Value, na.rm = T)),
-                     by = c("measuredElementTrade",
-                            "geographicAreaM49",
-                            "measuredItemCPC")]
-elem.462.492.avg <- elem.462.492.avg[timePointYears == base_year, ]
-elem.462.492.avg <-
-    elem.462.492.avg[, c('Value', 'timePointYears') := NULL]
-elem.462.492 <- merge(
-    elem.462.492,
-    elem.462.492.avg,
-    by = c(
-        "measuredElementTrade",
-        "geographicAreaM49",
-        "measuredItemCPC"
-    )
-)
-rm(elem.462.492.avg)
-elem.462.492[, Value := (Value * 100) / Mean]
-elem.462.492[, Mean := NULL]
-elem.462.492[measuredElementTrade == "5622"]$measuredElementTrade = "462"
-elem.462.492[measuredElementTrade == "5922"]$measuredElementTrade = "492"
-
-ELEMENTS.aggr[["462.492"]] <- elem.462.492
-rm(elem.462.492)
-
-## Aggr. Element 464 - 494 -------------------------------------------------------
-
-elem.464.494 <-
-    ELEMENTS.aggr$`64.94`[timePointYears %in% base_periode, ]
-elem.464.494 <-
-    elem.464.494[, Mean := list(mean(Value, na.rm = T)),
-                 by = c("measuredElementTrade",
-                        "geographicAreaM49",
-                        "measuredItemCPC")]
-elem.464.494 <- elem.464.494[timePointYears == base_year, ]
-elem.464.494 <- elem.464.494[, c('Value', 'timePointYears') := NULL]
-elem.464.494 <- merge(
-    ELEMENTS.aggr$`64.94`,
-    elem.464.494,
-    by = c(
-        "measuredElementTrade",
-        "geographicAreaM49",
-        "measuredItemCPC"
-    )
-)
-
-elem.464.494[, Value := (Value * 100) / Mean]
-elem.464.494[, Mean := NULL]
-
-elem.464.494[measuredElementTrade == "64"]$measuredElementTrade = "464"
-elem.464.494[measuredElementTrade == "94"]$measuredElementTrade = "494"
-
-ELEMENTS.aggr[["464.494"]] <- elem.464.494
-rm(elem.464.494)
-
-## Aggr. Element 465 - 495 -------------------------------------------------------
-
-elem.465.495 <-
-    ELEMENTS.aggr$`65.95`[timePointYears %in% base_periode, ]
-elem.465.495 <-
-    elem.465.495[, Mean := list(mean(Value, na.rm = T)),
-                 by = c("measuredElementTrade",
-                        "geographicAreaM49",
-                        "measuredItemCPC")]
-elem.465.495 <- elem.465.495[timePointYears == base_year, ]
-elem.465.495 <- elem.465.495[, c('Value', 'timePointYears') := NULL]
-elem.465.495 <- merge(
-    ELEMENTS.aggr$`65.95`,
-    elem.465.495,
-    by = c(
-        "measuredElementTrade",
-        "geographicAreaM49",
-        "measuredItemCPC"
-    )
-)
-
-elem.465.495[, Value := (Value * 100) / Mean]
-elem.465.495[, Mean := NULL]
-
-elem.465.495[measuredElementTrade == "65"]$measuredElementTrade = "465"
-elem.465.495[measuredElementTrade == "95"]$measuredElementTrade = "495"
-
-ELEMENTS.aggr[["465.495"]] <- elem.465.495
-rm(elem.465.495)
-
-# Merge Results -----------------------------------------------------------
-
-ELEMENTS.aggr <- do.call("rbind", ELEMENTS.aggr)
